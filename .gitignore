@@ -1,0 +1,16 @@
+env.tfvars
+env.json
+.terragrunt-*/
+.terraform/
+*.tfstate
+*.tfstate.*
+crash.log
+crash.*.log
+.terraform.lock.hcl
+import.tmp.tf
+.private/
+temp/
+tmp/
+.DS_Store
+.cache/
+.caches/
