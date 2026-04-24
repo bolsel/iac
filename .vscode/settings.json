@@ -1,0 +1,14 @@
+{
+    "editor.formatOnSave": true,
+    "[hcl]": {
+        "editor.defaultFormatter": "jkillian.custom-local-formatters",
+    },
+    "customLocalFormatters.formatters": [
+        {
+            "command": "terragrunt hcl format --stdin",
+            "languages": [
+                "hcl"
+            ]
+        }
+    ]
+}
