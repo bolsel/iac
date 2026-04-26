@@ -8,8 +8,11 @@ resource "cloudflare_dns_record" "this" {
   ttl      = each.value.ttl
   proxied  = each.value.proxied
   priority = try(each.value.priority, null)
+  comment  = each.value.comment
+  settings = each.value.settings
+  data     = each.value.data
+  tags     = each.value.tags
 }
-
 
 output "record_ids" {
   value = { for k, r in cloudflare_dns_record.this : k => r.id }
@@ -20,5 +23,6 @@ output "record_names" {
 }
 
 output "records" {
-  value = { for k, r in cloudflare_dns_record.this : k => r }
+  value     = { for k, r in cloudflare_dns_record.this : k => r }
+  sensitive = true
 }

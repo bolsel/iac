@@ -4,5 +4,6 @@ locals {
   dir_terraform  = "terraform"
   dir_terragrunt = "terragrunt"
   dir_scripts    = "scripts"
+  dir_tmp        = "tmp"
   environment    = get_env("ENVIRONMENT", "dev")
 }

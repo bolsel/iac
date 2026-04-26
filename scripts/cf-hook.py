@@ -3,7 +3,9 @@ import os
 import argparse
 import yaml
 import json
+import pylib
 import subprocess
+import shutil
 from cloudflare import Cloudflare
 
 TG_CTX_COMMAND=os.environ.get('TG_CTX_COMMAND')
@@ -19,49 +21,6 @@ resource = args.resource
 envs = json.loads(args.locals_json)
 path_generated_env = envs['path_private_env'] + '/env.generated.yaml'
 
-def tf_import_block(type, id, resource_name = "this"):
-    return f"""
-import {{
-  to = cloudflare_{type}.{resource_name}
-  id = "{id}"
-}}
-"""
-
-def tf_make_var(key, value):
-    if value is None:
-        val = "null"
-    elif isinstance(value, bool):
-        val = "true" if value else "false"
-    elif isinstance(value, (str, list, dict)):
-        val = json.dumps(value)
-    else:
-        val = str(value)
-    return f"{key} = {val}\n"
-
-def tf_make_vars(data):
-    _vars = ""
-    for k, v in data.items():
-        _vars += tf_make_var(k, v)
-    return _vars
-
-def tf_resource_has_state():
-    try:
-        out = subprocess.check_output(
-            ["terraform", "state", "list"],
-            text=True,
-            stderr=subprocess.DEVNULL
-        )
-        return out
-    except:
-        return False
-
-def tf_get_outputs():
-    result = subprocess.check_output(
-        ["terraform", "output", "-json"],
-        text=True
-    )
-    return json.loads(result)
-
 def generate_env_vars(data):
     if TG_CTX_COMMAND != "apply":
         return
@@ -75,7 +34,8 @@ def generate_env_vars(data):
 
 resources_check_exists = {
     "account": 'cloudflare_account_id' in envs['env_vars'],
-    "zone": 'cloudflare_zone_id' in envs['env_vars']
+    "zone": 'cloudflare_zone_id' in envs['env_vars'],
+    "dns": True, # only check tf state
 }
 
 match TG_CTX_HOOK_NAME:
@@ -85,7 +45,7 @@ match TG_CTX_HOOK_NAME:
             api_key=envs['env_vars']['cloudflare_api_key']
         )
 
-        if tf_resource_has_state():
+        if pylib.utils.tf_resource_has_state():
             print(f"Resource '{resource}' already has state. skipping")
             exit(0)
         if not resources_check_exists[resource]:
@@ -99,17 +59,51 @@ match TG_CTX_HOOK_NAME:
                 account = client.accounts.get(
                     account_id=envs['env_vars']['cloudflare_account_id'],
                 )
-                import_contents = tf_import_block("account", account.id)
-                tf_vars += tf_make_var('account_name', account.name)
+                import_contents = pylib.utils.tf_import_block("account", account.id)
+                tf_vars += pylib.utils.tf_make_var('account_name', account.name)
             case "zone":
                 zone = client.zones.get(
                     zone_id=envs['env_vars']['cloudflare_zone_id']
                 )
-                import_contents = tf_import_block("zone", zone.id)
-                tf_vars += tf_make_vars({
+                import_contents = pylib.utils.tf_import_block("zone", zone.id)
+                tf_vars += pylib.utils.tf_make_vars({
                     'account_id': zone.account.id,
                     'zone_name': zone.name
                 })
+            case "dns":
+                page = client.dns.records.list(
+                    zone_id=envs['env_vars']['cloudflare_zone_id']
+                )
+                results = {}
+                for record in page.result:
+                    key = record.name.replace(f".{envs['env_vars']['cloudflare_zone_name']}", '').replace('*.', 'star_')
+                    if key == envs['env_vars']['cloudflare_zone_name']:
+                        key = "root"
+                    name = pylib.utils.short_dns_name(record.name, envs['env_vars']['cloudflare_zone_name'])
+
+                    key_type = pylib.utils.generate_dns_key(key, record.type.lower(), results)
+                    item = {
+                        "name": name,
+                        "type": record.type,
+                        "content": record.content
+                    }
+                    if int(record.ttl) != 1:
+                        item["ttl"] = int(record.ttl)
+                    if record.proxied:
+                        item["proxied"] = True
+                    if getattr(record, 'priority', None) is not None:
+                        item["priority"] = record.priority
+                    if record.comment:
+                        item["comment"] = record.comment
+                    results[key_type] = item
+
+                    import_contents += pylib.utils.tf_import_block("dns_record", f"{envs['env_vars']['cloudflare_zone_id']}/{record.id}", f'this["{key_type}"]')
+                
+                with open(f"{envs['path_tmp']}/{envs['environment']}_cloudflare_dns_records.yaml", "w") as f:
+                    yaml.dump(results, f, indent=2, sort_keys=False)
+                
+                with open('.auto.tfvars.json', 'w') as f:
+                    json.dump({'records':results}, f, indent=2)
             case _:
                 print(f"Unknown resource type: {resource}")
                 exit(1)
@@ -122,7 +116,7 @@ match TG_CTX_HOOK_NAME:
                 f.write(tf_vars)
 
     case 'generate_resource':
-        outputs = tf_get_outputs()
+        outputs = pylib.utils.tf_get_outputs()
         match resource:
             case "account":
                 generate_env_vars({
@@ -134,8 +128,12 @@ match TG_CTX_HOOK_NAME:
                     'cloudflare_zone_id': outputs['id']['value'],
                     'cloudflare_zone_name': outputs['name']['value']
                 })
+            case "dns":
+                if os.path.exists(f"{envs['path_tmp']}/{envs['environment']}_cloudflare_dns_records.yaml"):
+                    shutil.move(f"{envs['path_tmp']}/{envs['environment']}_cloudflare_dns_records.yaml", f"{envs['path_private_env']}/cloudflare_dns_records.yaml")
             case _:
-                raise ValueError(f"Unknown resource type: {resource}")
+                print(f"Unknown resource type: {resource}")
+                exit(1)
     case _:
         print(f"Unknown hook name: {TG_CTX_HOOK_NAME}")
         exit(1)
