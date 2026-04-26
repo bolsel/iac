@@ -4,10 +4,10 @@ include "root" {
 }
 
 locals {
-  common          = read_terragrunt_config(find_in_parent_folders("cloudflare.common.hcl"))
-  account_id      = local.common.locals.account_id
-  is_deps_account = local.account_id == null
-  zone_name       = try(include.root.locals.env_vars.cloudflare_zone_name, "")
+  common           = read_terragrunt_config(find_in_parent_folders("cloudflare.common.hcl"))
+  account_id       = local.common.locals.account_id
+  need_account_dep = local.account_id == null
+  zone_name        = try(include.root.locals.env_vars.cloudflare_zone_name, "")
 }
 
 generate = local.common.generate
@@ -16,7 +16,7 @@ remote_state = local.common.remote_state
 
 dependency "account" {
   config_path = "../account"
-  enabled     = local.is_deps_account
+  enabled     = local.need_account_dep
   mock_outputs = {
     id = local.account_id
   }
