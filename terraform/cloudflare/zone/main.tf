@@ -11,3 +11,7 @@ resource "cloudflare_zone" "this" {
 output "id" {
   value = cloudflare_zone.this.id
 }
+
+output "name" {
+  value = cloudflare_zone.this.name
+}
