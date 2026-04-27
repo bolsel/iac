@@ -35,7 +35,7 @@ def generate_env_vars(data):
 resources_check_exists = {
     "account": 'cloudflare_account_id' in envs['env_vars'],
     "zone": 'cloudflare_zone_id' in envs['env_vars'],
-    "dns": True, # only check tf state
+    "dns": 'cloudflare_zone_id' in envs['env_vars']
 }
 
 match TG_CTX_HOOK_NAME:
