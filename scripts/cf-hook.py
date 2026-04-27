@@ -76,11 +76,10 @@ match TG_CTX_HOOK_NAME:
                 )
                 results = {}
                 for record in page.result:
-                    key = record.name.replace(f".{envs['env_vars']['cloudflare_zone_name']}", '').replace('*.', 'star_')
+                    key = record.name.replace(f".{envs['env_vars']['cloudflare_zone_name']}", '')
                     if key == envs['env_vars']['cloudflare_zone_name']:
                         key = "root"
                     name = pylib.utils.short_dns_name(record.name, envs['env_vars']['cloudflare_zone_name'])
-
                     key_type = pylib.utils.generate_dns_key(key, record.type.lower(), results)
                     item = {
                         "name": name,

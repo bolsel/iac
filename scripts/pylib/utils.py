@@ -3,24 +3,28 @@ import yaml
 import json
 import subprocess
 
-def normalize_key(key: str) -> str:
+def normalize_dns_key(key: str, replace_str: str = '_', dot_replace: bool = False) -> str:
     """
     Normalize key to be used as a variable name
     
     Args:
         key (str): The key to normalize
+        replace_str (str): The string to replace invalid chars with
+        dot_replace (bool): Whether to replace dots with replace_str
     
     Returns:
         str: The normalized key
     """
     key = key.strip().lower()
-    key = re.sub(r'[^a-z0-9_]+', '_', key) # replace invalid chars to underscore
-    key = re.sub(r'_+', '_', key) # remove duplicate underscores
-    key = key.strip('_') # trim underscore both side
+    if dot_replace:
+        key = key.replace('.', replace_str)
+    key = key.replace('*', 'star')
+    key = re.sub(r'[^a-z0-9\.-]+', replace_str, key) # replace invalid chars to replace_str
+    key = key.strip(replace_str) # trim replace_str both side
     if not key: # if empty -> root
         key = 'root'
     if key[0].isdigit(): # if starts with digit -> prefix r
-        key = f"r_{key}"
+        key = f"r{replace_str}{key}"
     return key
 
 def short_dns_name(full_name, zone_name):
@@ -31,7 +35,7 @@ def short_dns_name(full_name, zone_name):
         return full_name[:-len(suffix)]
     return full_name
 
-def generate_dns_key(key: str, _type: str, results: dict) -> str:
+def generate_dns_key(key: str, _type: str, results: dict, use_type=False, replace_str='_', dot_replace=False) -> str:
     """
     Generate a unique key for a DNS record
     
@@ -39,12 +43,15 @@ def generate_dns_key(key: str, _type: str, results: dict) -> str:
         key (str): The key to generate a unique key for
         _type (str): The type of the DNS record
         results (dict): The results dictionary
+        use_type (bool): Whether to use the type in the key
+        replace_str (str): The string to replace invalid chars with
+        dot_replace (bool): Whether to replace dots with replace_str
     
     Returns:
         str: The unique key for the DNS record
     """
-    key = normalize_key(key)
-    base_key = f"{key}_{_type}"
+    key = normalize_dns_key(key, replace_str=replace_str, dot_replace=dot_replace)
+    base_key = f"{key}_{_type}" if use_type else key
     if base_key not in results:
         return base_key
     _next = 2
