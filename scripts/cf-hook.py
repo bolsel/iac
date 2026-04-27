@@ -72,7 +72,7 @@ match TG_CTX_HOOK_NAME:
                 })
             case "dns":
                 page = client.dns.records.list(
-                    zone_id=envs['env_vars']['cloudflare_zone_id']
+                    zone_id=envs['env_vars']['cloudflare_zone_id'], per_page=5000000
                 )
                 results = {}
                 for record in page.result:
